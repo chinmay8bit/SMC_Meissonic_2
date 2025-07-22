@@ -540,7 +540,10 @@ class UVit2DConvEmbed(nn.Module):
         self.conv = nn.Conv2d(in_channels, block_out_channels, kernel_size=1, bias=bias)
 
     def forward(self, input_ids):
-        embeddings = self.embeddings(input_ids)
+        if input_ids.is_floating_point():
+            embeddings = input_ids @ self.embeddings.weight
+        else:
+            embeddings = self.embeddings(input_ids)
         embeddings = self.layer_norm(embeddings)
         embeddings = embeddings.permute(0, 3, 1, 2)
         embeddings = self.conv(embeddings)
