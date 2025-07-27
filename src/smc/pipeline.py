@@ -91,6 +91,7 @@ class Pipeline:
         reward_fn: Callable,
         resample_fn: Callable,
         kl_weight: float = 1.0,
+        lambdas: Optional[torch.Tensor] = None,
         height: Optional[int] = 1024,
         width: Optional[int] = 1024,
         num_inference_steps: int = 48,
@@ -98,6 +99,8 @@ class Pipeline:
         negative_prompt = None,
         num_particles: int = 1,
         batch_p: int = 1,
+        phi: int = 1, # number of samples for reward approximation
+        tau: float = 1.0, # temperature for taking x0 samples
         output_type="pil",
         micro_conditioning_aesthetic_score: int = 6,
         micro_conditioning_crop_coord: Tuple[int, int] = (0, 0),
@@ -105,6 +108,12 @@ class Pipeline:
         disable_progress_bar: bool = False,
         verbose=True,
     ):
+        # Set default lambdas
+        if lambdas is None:
+            lambdas = torch.ones(num_inference_steps + 1)
+        assert len(lambdas) == num_inference_steps + 1, f"lambdas must of length {num_inference_steps + 1}"
+        lambdas = lambdas.clamp_min(0.001).to(self._execution_device)
+        
         # 1. Calculate prompt (and negative prompt) embeddings
         prompt = [prompt]
         input_ids = self.tokenizer(
@@ -177,6 +186,10 @@ class Pipeline:
         def propagate():
             if proposal_type == "locally_optimal":
                 propgate_locally_optimal()
+            elif proposal_type == "reverse":
+                propagate_reverse()
+            elif proposal_type == "without_SMC":
+                propagate_without_SMC()
             else:
                 raise NotImplementedError(f"Proposal type {proposal_type} is not implemented.")
             
@@ -218,13 +231,12 @@ class Pipeline:
                     )
                     tmp_logits = torch.cat([tmp_logits, pad_logits], dim=-1)
                     
-                    phi = 1 # number of samples for approximation
-                    tmp_rewards = torch.zeros(latents_batch.size(0), phi)
+                    tmp_rewards = torch.zeros(latents_batch.size(0), phi, device=self._execution_device)
                     for phi_i in range(phi):
-                        sample = F.gumbel_softmax(tmp_logits, tau=0.1, hard=True)
+                        sample = F.gumbel_softmax(tmp_logits, tau=tau, hard=True)
                         sample = self._decode_one_hot_latents(sample, batch_p, height, width, "pt")
                         tmp_rewards[:, phi_i] = reward_fn(sample)
-                    tmp_rewards = kl_weight * logmeanexp(tmp_rewards / kl_weight, dim=-1)
+                    tmp_rewards = logmeanexp(tmp_rewards * scale_cur, dim=-1) / scale_cur
                     
                     tmp_rewards_grad = torch.autograd.grad(
                         outputs=tmp_rewards, 
@@ -235,11 +247,10 @@ class Pipeline:
                 logits[j:j+batch_p] = tmp_logits.detach()
                 rewards[j:j+batch_p] = tmp_rewards.detach()
                 rewards_grad[j:j+batch_p] = tmp_rewards_grad.detach()
-                log_twist[j:j+batch_p] = rewards[j:j+batch_p] / kl_weight
+                log_twist[j:j+batch_p] = rewards[j:j+batch_p] * scale_cur
                 
             if verbose:
                 print("Rewards: ", rewards)
-                print("Approx guidance norm: ", ((rewards_grad / kl_weight) ** 2).sum(dim=(1, 2, 3)).sqrt())
             
             # Calculate weights
             incremental_log_w = (log_prob_diffusion - log_prob_proposal) + (log_twist - log_twist_prev)
@@ -270,19 +281,148 @@ class Pipeline:
                 latents=latents,
                 step=i,
                 logits=logits,
-                approx_guidance=rewards_grad / kl_weight,
+                approx_guidance=rewards_grad * scale_next
             )
+            if verbose:
+                print("Approx guidance norm: ", ((rewards_grad * scale_next) ** 2).sum(dim=(1, 2, 3)).sqrt())
             latents, log_prob_proposal, log_prob_diffusion = (
                 sched_out.new_latents,
                 sched_out.log_prob_proposal,
                 sched_out.log_prob_diffusion,
             )
+            
+        def propagate_reverse():
+            nonlocal log_w, latents, logits, rewards, log_twist
+            log_twist_prev = log_twist.clone()
+            for j in range(0, num_particles, batch_p):
+                latents_batch = latents[j:j+batch_p]
+                if guidance_scale > 1.0:
+                    # Latents are duplicated to get both unconditional and conditional logits
+                    model_input = torch.cat([latents_batch] * 2) # type: ignore
+                else:
+                    model_input = latents_batch
+                # img_ids, text_ids are used for positional embeddings
+                if height == 1024: #args.resolution == 1024:
+                    img_ids = _prepare_latent_image_ids(model_input.shape[0], model_input.shape[1],model_input.shape[2],model_input.device,model_input.dtype)
+                else:
+                    img_ids = _prepare_latent_image_ids(model_input.shape[0],2*model_input.shape[1],2*model_input.shape[2],model_input.device,model_input.dtype)
+                txt_ids = torch.zeros(encoder_hidden_states.shape[1],3).to(device = encoder_hidden_states.device, dtype = encoder_hidden_states.dtype)
+                model_output = self.transformer(
+                    hidden_states = model_input,
+                    micro_conds=micro_conds,
+                    pooled_projections=prompt_embeds,
+                    encoder_hidden_states=encoder_hidden_states,
+                    img_ids = img_ids,
+                    txt_ids = txt_ids,
+                    timestep = torch.tensor([timestep], device=model_input.device, dtype=torch.long),
+                )
+                if guidance_scale > 1.0:
+                    uncond_logits, cond_logits = model_output.chunk(2)
+                    model_output = uncond_logits + guidance_scale * (cond_logits - uncond_logits)
+                tmp_logits = torch.permute(model_output, (0, 2, 3, 1)).float()
+                pad_logits = torch.full(
+                    (*tmp_logits.shape[:3], vocab_size - codebook_size),
+                    -torch.inf, 
+                    device=tmp_logits.device, dtype=tmp_logits.dtype
+                )
+                tmp_logits = torch.cat([tmp_logits, pad_logits], dim=-1)
+                
+                tmp_rewards = torch.zeros(latents_batch.size(0), phi, device=self._execution_device)
+                for phi_i in range(phi):
+                    sample = F.gumbel_softmax(tmp_logits, tau=tau, hard=True).argmax(dim=-1)
+                    sample = self._decode_latents(sample, batch_p, height, width, "pt")
+                    tmp_rewards[:, phi_i] = reward_fn(sample)
+                tmp_rewards = logmeanexp(tmp_rewards * scale_cur, dim=-1) / scale_cur
+                
+                logits[j:j+batch_p] = tmp_logits.detach()
+                rewards[j:j+batch_p] = tmp_rewards.detach()
+                log_twist[j:j+batch_p] = rewards[j:j+batch_p] * scale_cur
+                
+            if verbose:
+                print("Rewards: ", rewards)
+            
+            # Calculate weights
+            incremental_log_w = (log_twist - log_twist_prev)
+            log_w += incremental_log_w
+            
+            if verbose:
+                print("log_twist - log_twist_prev:", log_twist - log_twist_prev)
+                print("Incremental log weights: ", incremental_log_w)
+                print("Log weights: ", log_w)
+                print("Normalized weights: ", normalize_weights(log_w))
+            
+            # Resample particles
+            if verbose:
+                print(f"ESS: ", compute_ess_from_log_w(log_w))
+            if resample_condition:
+                resample_indices, is_resampled, log_w = resample_fn(log_w)
+                if is_resampled:
+                    logits = logits[resample_indices]
+                    rewards = rewards[resample_indices]
+                    log_twist = log_twist[resample_indices]
+                if verbose:
+                    print("Resample indices: ", resample_indices)
+            
+            # Propose new particles
+            sched_out = self.scheduler.step(
+                latents=latents,
+                step=i,
+                logits=logits,
+            )
+            latents = sched_out.new_latents
+                
+            
+        def propagate_without_SMC():
+            nonlocal latents, logits
+            for j in range(0, num_particles, batch_p):
+                latents_batch = latents[j:j+batch_p]
+                if guidance_scale > 1.0:
+                    # Latents are duplicated to get both unconditional and conditional logits
+                    model_input = torch.cat([latents_batch] * 2) # type: ignore
+                else:
+                    model_input = latents_batch
+                # img_ids, text_ids are used for positional embeddings
+                if height == 1024: #args.resolution == 1024:
+                    img_ids = _prepare_latent_image_ids(model_input.shape[0], model_input.shape[1],model_input.shape[2],model_input.device,model_input.dtype)
+                else:
+                    img_ids = _prepare_latent_image_ids(model_input.shape[0],2*model_input.shape[1],2*model_input.shape[2],model_input.device,model_input.dtype)
+                txt_ids = torch.zeros(encoder_hidden_states.shape[1],3).to(device = encoder_hidden_states.device, dtype = encoder_hidden_states.dtype)
+                model_output = self.transformer(
+                    hidden_states = model_input,
+                    micro_conds=micro_conds,
+                    pooled_projections=prompt_embeds,
+                    encoder_hidden_states=encoder_hidden_states,
+                    img_ids = img_ids,
+                    txt_ids = txt_ids,
+                    timestep = torch.tensor([timestep], device=model_input.device, dtype=torch.long),
+                )
+                if guidance_scale > 1.0:
+                    uncond_logits, cond_logits = model_output.chunk(2)
+                    model_output = uncond_logits + guidance_scale * (cond_logits - uncond_logits)
+                tmp_logits = torch.permute(model_output, (0, 2, 3, 1)).float()
+                pad_logits = torch.full(
+                    (*tmp_logits.shape[:3], vocab_size - codebook_size),
+                    -torch.inf, 
+                    device=tmp_logits.device, dtype=tmp_logits.dtype
+                )
+                tmp_logits = torch.cat([tmp_logits, pad_logits], dim=-1)
+                logits[j:j+batch_p] = tmp_logits.detach()
+                sched_out = self.scheduler.step(
+                    latents=latents,
+                    step=i,
+                    logits=logits,
+                )
+                latents = sched_out.new_latents
                 
         bar = enumerate(reversed(range(num_inference_steps)))
         if not disable_progress_bar:
             bar = tqdm(bar, leave=False)
         for i, timestep in bar:
             resample_condition = (i + 1) % 10 == 0 # every 10 steps
+            scale_cur = lambdas[i] / kl_weight
+            scale_next = lambdas[i + 1] / kl_weight
+            if verbose:
+                print(f"scale_cur: {scale_cur}, scale_next: {scale_next}")
             propagate()
             print('\n\n')
         
