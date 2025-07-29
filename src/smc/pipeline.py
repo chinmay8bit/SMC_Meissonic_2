@@ -90,6 +90,7 @@ class Pipeline:
         prompt,
         reward_fn: Callable,
         resample_fn: Callable,
+        resample_frequency: int = 1,
         kl_weight: float = 1.0,
         lambdas: Optional[torch.Tensor] = None,
         height: Optional[int] = 1024,
@@ -186,6 +187,8 @@ class Pipeline:
         def propagate():
             if proposal_type == "locally_optimal":
                 propgate_locally_optimal()
+            elif proposal_type == "straight_through_gradients":
+                propagate_straight_through_gradients()
             elif proposal_type == "reverse":
                 propagate_reverse()
             elif proposal_type == "without_SMC":
@@ -269,6 +272,7 @@ class Pipeline:
             if resample_condition:
                 resample_indices, is_resampled, log_w = resample_fn(log_w)
                 if is_resampled:
+                    latents = latents[resample_indices]
                     logits = logits[resample_indices]
                     rewards = rewards[resample_indices]
                     rewards_grad = rewards_grad[resample_indices]
@@ -291,6 +295,103 @@ class Pipeline:
                 sched_out.log_prob_diffusion,
             )
             
+        def propagate_straight_through_gradients():
+            nonlocal log_w, latents, log_prob_proposal, log_prob_diffusion, logits, rewards, rewards_grad, log_twist
+            log_twist_prev = log_twist.clone()
+            for j in range(0, num_particles, batch_p):
+                latents_batch = latents[j:j+batch_p]
+                if guidance_scale > 1.0:
+                    # Latents are duplicated to get both unconditional and conditional logits
+                    model_input = torch.cat([latents_batch] * 2) # type: ignore
+                else:
+                    model_input = latents_batch
+                # img_ids, text_ids are used for positional embeddings
+                if height == 1024: #args.resolution == 1024:
+                    img_ids = _prepare_latent_image_ids(model_input.shape[0], model_input.shape[1],model_input.shape[2],model_input.device,model_input.dtype)
+                else:
+                    img_ids = _prepare_latent_image_ids(model_input.shape[0],2*model_input.shape[1],2*model_input.shape[2],model_input.device,model_input.dtype)
+                txt_ids = torch.zeros(encoder_hidden_states.shape[1],3).to(device = encoder_hidden_states.device, dtype = encoder_hidden_states.dtype)
+                model_output = self.transformer(
+                    hidden_states = model_input,
+                    micro_conds=micro_conds,
+                    pooled_projections=prompt_embeds,
+                    encoder_hidden_states=encoder_hidden_states,
+                    img_ids = img_ids,
+                    txt_ids = txt_ids,
+                    timestep = torch.tensor([timestep], device=model_input.device, dtype=torch.long),
+                )
+                if guidance_scale > 1.0:
+                    uncond_logits, cond_logits = model_output.chunk(2)
+                    model_output = uncond_logits + guidance_scale * (cond_logits - uncond_logits)
+                tmp_logits = torch.permute(model_output, (0, 2, 3, 1)).float()
+                pad_logits = torch.full(
+                    (*tmp_logits.shape[:3], vocab_size - codebook_size),
+                    -torch.inf, 
+                    device=tmp_logits.device, dtype=tmp_logits.dtype
+                )
+                tmp_logits = torch.cat([tmp_logits, pad_logits], dim=-1)
+                
+                # take the most likely sample
+                sample = tmp_logits.argmax(dim=-1)
+                
+                with torch.enable_grad():
+                    sample_one_hot = F.one_hot(sample, num_classes=vocab_size).float().requires_grad_(True)
+                    sample_decoded = self._decode_one_hot_latents(sample_one_hot, batch_p, height, width, "pt")
+                    tmp_rewards = reward_fn(sample_decoded)
+                    tmp_rewards_grad = torch.autograd.grad(
+                        outputs=tmp_rewards, 
+                        inputs=sample_one_hot,
+                        grad_outputs=torch.ones_like(tmp_rewards)
+                    )[0].detach()
+                
+                logits[j:j+batch_p] = tmp_logits.detach()
+                rewards[j:j+batch_p] = tmp_rewards.detach()
+                rewards_grad[j:j+batch_p] = tmp_rewards_grad.detach()
+                log_twist[j:j+batch_p] = rewards[j:j+batch_p] * scale_cur
+                
+            if verbose:
+                print("Rewards: ", rewards)
+            
+            # Calculate weights
+            incremental_log_w = (log_prob_diffusion - log_prob_proposal) + (log_twist - log_twist_prev)
+            log_w += incremental_log_w
+            
+            if verbose:
+                print("log_prob_diffusion - log_prob_proposal: ", log_prob_diffusion - log_prob_proposal)
+                print("log_twist - log_twist_prev:", log_twist - log_twist_prev)
+                print("Incremental log weights: ", incremental_log_w)
+                print("Log weights: ", log_w)
+                print("Normalized weights: ", normalize_weights(log_w))
+            
+            # Resample particles
+            if verbose:
+                print(f"ESS: ", compute_ess_from_log_w(log_w))
+            if resample_condition:
+                resample_indices, is_resampled, log_w = resample_fn(log_w)
+                if is_resampled:
+                    latents = latents[resample_indices]
+                    logits = logits[resample_indices]
+                    rewards = rewards[resample_indices]
+                    rewards_grad = rewards_grad[resample_indices]
+                    log_twist = log_twist[resample_indices]
+                if verbose:
+                    print("Resample indices: ", resample_indices)
+            
+            # Propose new particles
+            sched_out = self.scheduler.step_with_approx_guidance(
+                latents=latents,
+                step=i,
+                logits=logits,
+                approx_guidance=rewards_grad * scale_next
+            )
+            if verbose:
+                print("Approx guidance norm: ", ((rewards_grad * scale_next) ** 2).sum(dim=(1, 2, 3)).sqrt())
+            latents, log_prob_proposal, log_prob_diffusion = (
+                sched_out.new_latents,
+                sched_out.log_prob_proposal,
+                sched_out.log_prob_diffusion,
+            )
+        
         def propagate_reverse():
             nonlocal log_w, latents, logits, rewards, log_twist
             log_twist_prev = log_twist.clone()
@@ -357,6 +458,7 @@ class Pipeline:
             if resample_condition:
                 resample_indices, is_resampled, log_w = resample_fn(log_w)
                 if is_resampled:
+                    latents = latents[resample_indices]
                     logits = logits[resample_indices]
                     rewards = rewards[resample_indices]
                     log_twist = log_twist[resample_indices]
@@ -418,7 +520,7 @@ class Pipeline:
         if not disable_progress_bar:
             bar = tqdm(bar, leave=False)
         for i, timestep in bar:
-            resample_condition = (i + 1) % 10 == 0 # every 10 steps
+            resample_condition = (i + 1) % resample_frequency == 0
             scale_cur = lambdas[i] / kl_weight
             scale_next = lambdas[i + 1] / kl_weight
             if verbose:
