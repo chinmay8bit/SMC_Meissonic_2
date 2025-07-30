@@ -67,7 +67,8 @@ def partial_resample(log_weights: torch.Tensor,
     K = log_weights.numel()
 
     # Convert log-weights to normalized weights
-    weights = torch.softmax(log_weights, dim=0)
+    log_weights = normalize_log_weights(log_weights)
+    weights = torch.exp(log_weights)
 
     # Determine how many high and low weights to resample
     M_hi = M // 2
