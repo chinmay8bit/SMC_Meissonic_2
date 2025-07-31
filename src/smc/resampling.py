@@ -71,7 +71,7 @@ def partial_resample(log_weights: torch.Tensor,
     weights = torch.exp(log_weights)
 
     # Determine how many high and low weights to resample
-    M_hi = M // 2
+    M_hi = 1 # M // 2
     M_lo = M - M_hi
 
     # Get indices of highest and lowest weights

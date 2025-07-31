@@ -1,13 +1,14 @@
 import os
 import sys
 sys.path.append("./")
+from datetime import datetime
 
 import torch
 from torchvision import transforms
 from src.smc.transformer import Transformer2DModel
 from src.smc.pipeline import Pipeline
 from src.scheduler import Scheduler
-from src.smc.scheduler import ReMDMScheduler
+from src.smc.scheduler import ReMDMScheduler, MeissonicScheduler
 from transformers import (
     CLIPTextModelWithProjection,
     CLIPTokenizer,
@@ -15,6 +16,7 @@ from transformers import (
 from diffusers.models.autoencoders.vq_model import VQModel
 import src.smc.rewards as rewards
 from src.smc.resampling import resample
+from src.utils.metadata import get_metadata, save_metadata_json
 
 device = 'cuda'
 dtype = torch.bfloat16
@@ -27,15 +29,26 @@ text_encoder = CLIPTextModelWithProjection.from_pretrained(model_path, subfolder
 #         )
 tokenizer = CLIPTokenizer.from_pretrained(model_path, subfolder="tokenizer", torch_dtype=dtype)
 scheduler = Scheduler.from_pretrained(model_path, subfolder="scheduler", torch_dtype=dtype)
-scheduler_new = ReMDMScheduler(
-    schedule="cosine",
-    remask_strategy="rescale",
-    eta=0.1,
-    mask_token_id=scheduler.config.mask_token_id, # type: ignore
-)
+
+use_remdm = False
+if use_remdm:
+    remdm_schedule = "cosine"
+    remdm_remask_strategy = "rescale"
+    remdm_eta = 0.1
+    scheduler_new = ReMDMScheduler(
+        schedule=remdm_schedule,
+        remask_strategy=remdm_remask_strategy,
+        eta=remdm_eta,
+        mask_token_id=scheduler.config.mask_token_id, # type: ignore
+    )
+else:
+    scheduler_new = MeissonicScheduler(
+        mask_token_id=scheduler.config.mask_token_id, # type: ignore
+        masking_schedule=scheduler.config.masking_schedule, #  type: ignore
+    )
 pipe = Pipeline(vq_model, tokenizer=tokenizer, text_encoder=text_encoder, transformer=model, scheduler=scheduler_new, device=device, model_dtype=dtype)
 
-steps = 48
+steps = 100
 CFG = 9
 resolution = 512 
 negative_prompt = "worst quality, low quality, low res, blurry, distortion, watermark, logo, signature, text, jpeg artifacts, signature, sketch, duplicate, ugly, identifying mark"
@@ -52,10 +65,27 @@ prompts = [
     "A woman is standing next to a picture of another woman."
 ]
 
-num_images = 4
+num_images = 8
 batch_p = 1
-kl_weight = 0.0005
+# kl_weight = 0.0005 # pick score
+kl_weight = 0.01 # aesthetic score
 # kl_weight = 10000
+proposal_type = "locally_optimal"
+# proposal_type = "reverse"
+# proposal_type = "without_SMC"
+# proposal_type = "straight_through_gradients"
+resample_frequency = 10
+partial_resampling = True
+continuous_formulation = True
+
+phi = 1
+tau = 1.0
+lambda_tempering = True
+if lambda_tempering:
+    lambda_one_at = 100
+    lambdas = torch.cat([torch.linspace(0, 1, lambda_one_at + 1), torch.ones(steps - lambda_one_at)])
+else:
+    lambdas = None
 
 if isinstance(prompts[0], str):
     prompt = reward_prompt = prompts[0]
@@ -63,32 +93,56 @@ else:
     prompt, reward_prompt = prompts[0] # type: ignore
     
 
-reward_fn, reward_name = rewards.PickScore(device = 'cuda'), "pick"
-# reward_fn, reward_name = rewards.aesthetic_score(device = 'cuda'), "aesthetic"
+# reward_fn, reward_name = rewards.PickScore(device = 'cuda'), "pick"
+reward_fn, reward_name = rewards.aesthetic_score(device = 'cuda'), "aesthetic"
 # reward_fn, reward_name = lambda images, prompts: rewards.color_match_reward(images, torch.tensor([1, 0, 0])), "color_red"
 image_reward_fn = lambda images: reward_fn(
     images, 
     [reward_prompt] * len(images)
 )
 
+metadata = get_metadata(dict(locals()))
+
 images = pipe(
     prompt=prompt, 
     reward_fn=image_reward_fn,
-    resample_fn=lambda log_w: resample(log_w, ess_threshold=0.5, partial=False),
+    resample_fn=lambda log_w: resample(log_w, ess_threshold=0.5, partial=partial_resampling),
+    resample_frequency=resample_frequency,
     negative_prompt=negative_prompt,
     height=resolution,
     width=resolution,
     guidance_scale=CFG,
     num_inference_steps=steps,
     kl_weight=kl_weight,
+    lambdas=lambdas,
     num_particles=num_images,
     batch_p=batch_p,
+    proposal_type=proposal_type,
+    use_continuous_formulation=continuous_formulation,
+    phi=phi,
+    tau=tau,
+    output_type="pt",
 )
 
-output_dir = "./output_SMC"
+image_rewards = image_reward_fn(images)
+pil_images = pipe.image_processor.postprocess(images, "pil") # type: ignore
+
+save_best_image_only = False
+best_image_reward, best_image_idx = image_rewards.max(dim=0)
+print("Best image reward:", best_image_reward)
+
+metadata["rewards"] = image_rewards.tolist()
+metadata["best_reward"] = best_image_reward.item()
+metadata["best_reward_idx"] = best_image_idx.item()
+
+cur_time = datetime.now().strftime("%Y%m%d-%H%M%S")
+output_dir = os.path.join("./output_SMC", cur_time)
 os.makedirs(output_dir, exist_ok=True)
 for i in range(len(images)):
+    if save_best_image_only and i != best_image_idx:
+        continue
     sanitized_prompt = prompt.replace(" ", "_")
-    file_path = os.path.join(output_dir, f"{sanitized_prompt}_{resolution}_{steps}_{CFG}.png")
-    images[i].save(file_path) #type: ignore
+    file_path = os.path.join(output_dir, f"{sanitized_prompt}_{resolution}_{steps}_{CFG}_{i}.png")
+    pil_images[i].save(file_path) #type: ignore
     print(f"The {i+1}/{num_images} image is saved to {file_path}")
+    save_metadata_json(metadata, output_dir)
