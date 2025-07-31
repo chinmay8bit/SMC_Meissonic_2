@@ -1,6 +1,5 @@
 #!/bin/bash
 #SBATCH --gres=gpu:1
-#SBATCH --partition=resgpu
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=cp524
 
