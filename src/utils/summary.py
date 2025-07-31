@@ -82,7 +82,7 @@ def print_results():
 # Best-of-N
 print("# Best-of-N")
 filter_dict = {"proposal_type": "without_SMC"}
-group_by = ["use_remdm", "CFG", "steps", "reward_name", "prompt"]
+group_by = ["use_remdm", "CFG", "steps", "reward_name", "prompt", "num_images"]
 target = "best_reward"
 
 results = summarize_metadata(output_dir, filter_dict, group_by, target)
@@ -91,7 +91,7 @@ print_results()
 # SMC with Reverse as proposal
 print("# SMC with Reverse as proposal")
 filter_dict = {"proposal_type": "reverse"}
-group_by = ["use_remdm", "CFG", "steps", "reward_name", "prompt", "phi", "tau", "kl_weight", "lambda_tempering", "lambda_one_at", "resample_frequency", "partial_resampling"]
+group_by = ["use_remdm", "CFG", "steps", "reward_name", "prompt", "num_images", "phi", "tau", "kl_weight", "lambda_tempering", "lambda_one_at", "resample_frequency", "partial_resampling"]
 target = "best_reward"
 results = summarize_metadata(output_dir, filter_dict, group_by, target)
 print_results()
@@ -99,7 +99,7 @@ print_results()
 # SMC with Locally Optimal Proposal
 print("# SMC with Locally Optimal Proposal")
 filter_dict = {"proposal_type": "locally_optimal"}
-group_by = ["use_remdm", "CFG", "steps", "reward_name", "prompt", "phi", "tau", "kl_weight", "lambda_tempering", "lambda_one_at", "resample_frequency", "partial_resampling", "continuous_formulation"]
+group_by = ["use_remdm", "CFG", "steps", "reward_name", "prompt", "num_images", "phi", "tau", "kl_weight", "lambda_tempering", "lambda_one_at", "resample_frequency", "partial_resampling", "continuous_formulation"]
 target = "best_reward"
 results = summarize_metadata(output_dir, filter_dict, group_by, target)
 print_results()
@@ -107,7 +107,7 @@ print_results()
 # SMC with Locally Optimal Proposal - Straight through grads
 print("# SMC with Locally Optimal Proposal - Straight through grads")
 filter_dict = {"proposal_type": "straight_through_gradients"}
-group_by = ["use_remdm", "CFG", "steps", "reward_name", "prompt", "phi", "tau", "kl_weight", "lambda_tempering", "lambda_one_at", "resample_frequency", "partial_resampling"]
+group_by = ["use_remdm", "CFG", "steps", "reward_name", "prompt", "num_images", "phi", "tau", "kl_weight", "lambda_tempering", "lambda_one_at", "resample_frequency", "partial_resampling"]
 target = "best_reward"
 results = summarize_metadata(output_dir, filter_dict, group_by, target)
 print_results()

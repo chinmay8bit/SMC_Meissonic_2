@@ -4,6 +4,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **best_reward**: [6.8366498947143555, 6.6916046142578125, 6.871970176696777]  
 **Average**: 6.80  (3)
 
@@ -14,6 +15,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **best_reward**: [6.907285690307617, 6.878042697906494, 6.904730796813965, 6.965787887573242, 7.1022515296936035, 6.799677848815918]  
 **Average**: 6.93  (6)
 
@@ -25,6 +27,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -42,6 +45,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 3  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -59,6 +63,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 0.1  
 **kl_weight**: 0.01  
@@ -76,6 +81,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -93,6 +99,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -111,6 +118,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -129,6 +137,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 3  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -147,6 +156,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -165,6 +175,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 3  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -183,6 +194,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -201,6 +213,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -219,6 +232,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 0.1  
 **kl_weight**: 0.01  
@@ -237,6 +251,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -255,6 +270,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 0.1  
 **kl_weight**: 0.01  
@@ -273,6 +289,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
@@ -291,6 +308,7 @@
 **steps**: 100  
 **reward_name**: aesthetic  
 **prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
 **phi**: 1  
 **tau**: 1.0  
 **kl_weight**: 0.01  
