@@ -1,10 +1,13 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Optional, Tuple, Union, List
 
 import math
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+from src.scheduler import mask_by_random_topk
 
 
 @dataclass
@@ -44,16 +47,6 @@ class BaseScheduler(ABC):
         pass
 
 
-def mask_by_random_topk(mask_len, probs, temperature=1.0):
-    mask_len = mask_len.squeeze()
-    confidence = torch.log(probs) + torch.Tensor(temperature * np.random.gumbel(size=probs.shape)).cuda()
-    sorted_confidence, _ = torch.sort(confidence, axis=-1) # type: ignore
-    # Obtains cut off threshold given the mask lengths.
-    cut_off = sorted_confidence[:, mask_len.long()-1:mask_len.long()]
-    # Masks tokens with lower confidence.
-    masking = (confidence <= cut_off)
-    return masking
-
 def sum_masked_logits(
     logits: torch.Tensor,
     preds: torch.Tensor,
@@ -63,24 +56,24 @@ def sum_masked_logits(
     Sum logits at `preds` indices, masked by `mask`, handling invalid `preds`.
 
     Args:
-        logits: Tensor of shape (B, T, C) - logits over C classes.
-        preds: Tensor of shape (B, T) - predicted class indices.
-        mask: Tensor of shape (B, T) - binary mask to include positions.
+        logits: Tensor of shape (B, H, W, C) - logits over C classes.
+        preds: Tensor of shape (B, H, W) - predicted class indices.
+        mask: Tensor of shape (B, H, W) - binary mask to include positions.
 
     Returns:
         Tensor of shape (B,) - sum of selected logits per batch item.
     """
-    B, T, C = logits.shape
+    B, H, W, C = logits.shape
     # Ensure preds are in valid index range [0, C-1]
     valid = (preds >= 0) & (preds <= preds[mask].max())
     # Replace invalid preds with a dummy index (0), which we will mask later
     safe_preds = preds.masked_fill(~valid, 0)
     # Gather logits at predicted indices
-    selected = torch.gather(logits, dim=2, index=safe_preds.unsqueeze(-1)).squeeze(-1)
+    selected = torch.gather(logits, dim=3, index=safe_preds.unsqueeze(-1)).squeeze(-1)
     # Zero out contributions from invalid preds and masked positions
     selected = selected * valid * mask
-    # Sum over time dimension
-    return selected.sum(dim=1)
+    # Sum over H, W dimension
+    return selected.sum(dim=(1, 2))
 
 def log1mexp(x: torch.Tensor) -> torch.Tensor:
     """
@@ -93,16 +86,21 @@ def log1mexp(x: torch.Tensor) -> torch.Tensor:
     )
 
 
-class MageScheduler(BaseScheduler):
+class MeissonicScheduler(BaseScheduler):
     def __init__(self, 
             mask_token_id: int, 
-            choice_temperature: float,
+            masking_schedule: str = "cosine",
         ):
         self.mask_token_id = mask_token_id
-        self.choice_temperature = choice_temperature
+        self.masking_schedule = masking_schedule
     
-    def set_timesteps(self, num_inference_steps: int):
+    def set_timesteps(self, num_inference_steps: int, temperature: Union[int, Tuple[int, int], List[int]] = (2, 0), device='cuda'):
         self.num_inference_steps = num_inference_steps
+        self.timesteps = torch.arange(num_inference_steps, device=device).flip(0)
+        if isinstance(temperature, (tuple, list)):
+            self.temperatures = torch.linspace(temperature[0], temperature[1], num_inference_steps, device=device)
+        else:
+            self.temperatures = torch.linspace(temperature, 0.01, num_inference_steps, device=device)
     
     def step(
         self,
@@ -110,48 +108,58 @@ class MageScheduler(BaseScheduler):
         step: int,
         logits: torch.Tensor,
     ) -> SchedulerStepOutput:
-        B, L, C = logits.shape
-        assert latents.shape == (B, L)
-        
-        _CONFIDENCE_OF_KNOWN_TOKENS = +np.inf
-        unknown_number_in_the_beginning = 256
-        
-        # get token prediction
-        sample_dist = torch.distributions.Categorical(logits=logits) # type: ignore
-        sampled_ids = sample_dist.sample()
-        
-        # get ids for next step
-        unknown_map = (latents == self.mask_token_id)
-        sampled_ids = torch.where(unknown_map, sampled_ids, latents)
-        
-        if step + 1 < self.num_inference_steps:
-            # Defines the mask ratio for the next round. The number to mask out is
-            # determined by mask_ratio * unknown_number_in_the_beginning.
-            ratio = 1. * (step + 1) / self.num_inference_steps
+        batch_size, height, width, vocab_size = logits.shape
+        sample = latents.reshape(batch_size, height * width)
+        model_output = logits.reshape(batch_size, height * width, vocab_size)
 
-            mask_ratio = np.cos(math.pi / 2. * ratio)
+        unknown_map = sample == self.mask_token_id
 
-            # sample ids according to prediction confidence
-            probs = F.softmax(logits, dim=-1)
-            selected_probs = torch.squeeze(
-                torch.gather(probs, dim=-1, index=torch.unsqueeze(sampled_ids, -1)), -1)
+        probs = model_output.softmax(dim=-1)
 
-            selected_probs = torch.where(unknown_map, selected_probs.double(), _CONFIDENCE_OF_KNOWN_TOKENS).float()
+        device = probs.device
+        probs_ = probs
+        if probs_.device.type == "cpu" and probs_.dtype != torch.float32:
+            probs_ = probs_.float()  # multinomial is not implemented for cpu half precision
+        probs_ = probs_.reshape(-1, probs.size(-1))
+        pred_original_sample = torch.multinomial(probs_, 1).to(device=device)
+        pred_original_sample = pred_original_sample[:, 0].view(*probs.shape[:-1])
+        pred_original_sample = torch.where(unknown_map, pred_original_sample, sample)
 
-            mask_len = torch.Tensor([np.floor(unknown_number_in_the_beginning * mask_ratio)]).cuda()
-            # Keeps at least one of prediction in this round and also masks out at least
-            # one and for the next iteration
-            mask_len = torch.maximum(torch.Tensor([1]).cuda(),
-                                    torch.minimum(torch.sum(unknown_map, dim=-1, keepdims=True) - 1, mask_len)) # type: ignore
-
-            # Sample masking tokens for next iteration
-            masking = mask_by_random_topk(mask_len[0], selected_probs, self.choice_temperature * (1 - ratio))
-            # Masks tokens with lower confidence.
-            new_latents = torch.where(masking, self.mask_token_id, sampled_ids)
+        timestep = self.num_inference_steps - 1 - step
+        if timestep == 0:
+            prev_sample = pred_original_sample
         else:
-            new_latents = sampled_ids
+            seq_len = sample.shape[1]
+            step_idx = (self.timesteps == timestep).nonzero()
+            ratio = (step_idx + 1) / len(self.timesteps)
+
+            if self.masking_schedule == "cosine":
+                mask_ratio = torch.cos(ratio * math.pi / 2)
+            elif self.masking_schedule == "linear":
+                mask_ratio = 1 - ratio
+            else:
+                raise ValueError(f"unknown masking schedule {self.masking_schedule}")
+
+            mask_len = (seq_len * mask_ratio).floor()
+            # do not mask more than amount previously masked
+            mask_len = torch.min(unknown_map.sum(dim=-1, keepdim=True) - 1, mask_len)
+            # mask at least one
+            mask_len = torch.max(torch.tensor([1], device=model_output.device), mask_len)
+
+            selected_probs = torch.gather(probs, -1, pred_original_sample[:, :, None])[:, :, 0]
+            # Ignores the tokens given in the input by overwriting their confidence.
+            selected_probs = torch.where(unknown_map, selected_probs, torch.finfo(selected_probs.dtype).max)
+
+            masking = mask_by_random_topk(mask_len, selected_probs, self.temperatures[step_idx].item())
+
+            # Masks tokens with lower confidence.
+            prev_sample = torch.where(masking, self.mask_token_id, pred_original_sample)
+
+        print("Unmasked:", (prev_sample != self.mask_token_id).sum(dim=1))
+        prev_sample = prev_sample.reshape(batch_size, height, width)
+        pred_original_sample = pred_original_sample.reshape(batch_size, height, width)
         
-        return SchedulerStepOutput(new_latents)
+        return SchedulerStepOutput(new_latents=prev_sample)
         
     
     def step_with_approx_guidance(
@@ -166,7 +174,7 @@ class MageScheduler(BaseScheduler):
         new_latents = sched_out.new_latents
         
         newly_filled_positions = (latents != new_latents)
-        print("Newly filled positions:", newly_filled_positions.sum(dim=1))
+        print("Newly filled positions:", newly_filled_positions.sum(dim=(1, 2)))
         
         log_prob_proposal = sum_masked_logits(
             logits=proposal_logits.log_softmax(dim=-1),
