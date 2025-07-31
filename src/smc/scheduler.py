@@ -225,8 +225,11 @@ class ReMDMScheduler(BaseScheduler):
         step: int,
         logits: torch.Tensor,
     ) -> SchedulerStepOutput:
-        B, L, C = logits.shape
-        assert latents.shape == (B, L)
+        B, H, W, C = logits.shape
+        assert latents.shape == (B, H, W)
+        
+        latents = latents.reshape(B, H*W)
+        logits = logits.reshape(B, H*W, C)
         
         t = self.num_inference_steps - step
         s = t - 1
@@ -267,11 +270,11 @@ class ReMDMScheduler(BaseScheduler):
             logits_z_t_neq_m,
             logits_z_t_eq_m,
         )
-        assert torch.allclose(torch.exp(p_theta_logits).sum(dim=-1), torch.ones(B, L, device=logits.device)), (torch.exp(p_theta_logits).sum(dim=-1) - torch.ones(B, L, device=logits.device)).abs().max()
+        assert torch.allclose(torch.exp(p_theta_logits).sum(dim=-1), torch.ones(B, H*W, device=logits.device)), (torch.exp(p_theta_logits).sum(dim=-1) - torch.ones(B, H*W, device=logits.device)).abs().max()
         diffusion_dist = torch.distributions.Categorical(logits=p_theta_logits) # type: ignore
         new_latents = diffusion_dist.sample()
         print("Unmasked:", (new_latents != self.mask_token_id).sum(dim=1))
-        return SchedulerStepOutput(new_latents)
+        return SchedulerStepOutput(new_latents.reshape(B, H, W))
     
     def step_with_approx_guidance(
         self,
