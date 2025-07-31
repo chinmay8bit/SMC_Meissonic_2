@@ -106,6 +106,7 @@ class Pipeline:
         micro_conditioning_aesthetic_score: int = 6,
         micro_conditioning_crop_coord: Tuple[int, int] = (0, 0),
         proposal_type:str = "locally_optimal",
+        use_continuous_formulation: bool = False, # Whether to use a continuous formulation of carry over unmasking
         disable_progress_bar: bool = False,
         verbose=True,
     ):
@@ -172,6 +173,10 @@ class Pipeline:
         vocab_size = self.transformer.config.vocab_size # type:ignore
         codebook_size = self.transformer.config.codebook_size # type: ignore
         
+        # Set some constant vectors
+        ONE = torch.ones(vocab_size, device=self._execution_device).float()
+        MASK = F.one_hot(torch.tensor(self.scheduler.mask_token_id), num_classes=vocab_size).float().to(self._execution_device) # type: ignore
+        
         # 4. Set scheduler timesteps
         self.scheduler.set_timesteps(num_inference_steps)
         
@@ -235,8 +240,11 @@ class Pipeline:
                     tmp_logits = torch.cat([tmp_logits, pad_logits], dim=-1)
                     
                     tmp_rewards = torch.zeros(latents_batch.size(0), phi, device=self._execution_device)
+                    gamma = 1 - ((ONE - MASK) * latents_one_hot).sum(dim=-1, keepdim=True)
                     for phi_i in range(phi):
                         sample = F.gumbel_softmax(tmp_logits, tau=tau, hard=True)
+                        if use_continuous_formulation:
+                            sample = gamma * sample + (ONE - MASK) * latents_one_hot
                         sample = self._decode_one_hot_latents(sample, batch_p, height, width, "pt")
                         tmp_rewards[:, phi_i] = reward_fn(sample)
                     tmp_rewards = logmeanexp(tmp_rewards * scale_cur, dim=-1) / scale_cur
