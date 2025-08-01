@@ -152,6 +152,38 @@ def ImageReward(
 
         return loss_fn
     
+    
+def ImageReward_Fk_Steering(
+    inference_dtype=None, 
+    device=None, 
+    return_loss=False, 
+    bias=None,
+):
+    from src.smc.scorers.image_reward_utils import rm_load
+
+    scorer = rm_load("ImageReward-v1.0")
+
+    if not return_loss:
+        def _fn(images, prompts):
+            if images.min() < 0: # normalize unnormalized images
+                images = ((images / 2) + 0.5).clamp(0, 1)
+            scores = scorer.score_batched(prompts, images)
+            if bias:
+                scores += bias
+            return scores
+
+        return _fn
+
+    else:
+        def loss_fn(images, prompts):
+            if images.min() < 0: # normalize unnormalized images
+                images = ((images / 2) + 0.5).clamp(0, 1)
+            scores = scorer.score_batched(prompts, images)
+
+            loss = - scores
+            return loss, scores
+
+        return loss_fn
 
 
 def PickScore(
