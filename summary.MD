@@ -1,5 +1,15 @@
-# Best-of-N
-**use_remdm**: False  
+# Using Meissonic's scheduler
+## Best-of-N
+**CFG**: 9  
+**steps**: 100  
+**reward_name**: aesthetic  
+**prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
+**best_reward**: [6.961170673370361, 6.907285690307617, 6.878042697906494, 7.017531394958496, 7.002593040466309, 7.006130218505859, 6.973943710327148, 6.904730796813965, 6.965787887573242, 7.1022515296936035, 7.002797603607178, 6.799677848815918]  
+**Average**: 6.96  (12)
+
+---
+
 **CFG**: 5  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -10,19 +20,7 @@
 
 ---
 
-**use_remdm**: False  
-**CFG**: 9  
-**steps**: 100  
-**reward_name**: aesthetic  
-**prompt**: A large body of water with a rock in the middle and mountains in the background.  
-**num_images**: 8  
-**best_reward**: [6.907285690307617, 6.878042697906494, 6.904730796813965, 6.965787887573242, 7.1022515296936035, 6.799677848815918]  
-**Average**: 6.93  (6)
-
----
-
-# SMC with Reverse as proposal
-**use_remdm**: False  
+## SMC with Reverse as proposal
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -40,7 +38,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -58,7 +55,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -76,7 +72,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -94,7 +89,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -112,8 +106,7 @@
 
 ---
 
-# SMC with Locally Optimal Proposal
-**use_remdm**: False  
+## SMC with Locally Optimal Proposal
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -127,12 +120,29 @@
 **resample_frequency**: 10  
 **partial_resampling**: True  
 **continuous_formulation**: True  
-**best_reward**: [7.187208652496338, 7.17878532409668, 7.368976593017578, 6.917961120605469, 7.225987911224365, 7.204327583312988]  
-**Average**: 7.18  (6)
+**best_reward**: [7.187208652496338, 7.17878532409668, 7.158297538757324, 7.107602119445801, 7.368976593017578, 7.185915946960449, 6.917961120605469, 7.225987911224365, 6.998950958251953, 7.204327583312988]  
+**Average**: 7.15  (10)
 
 ---
 
-**use_remdm**: False  
+**CFG**: 9  
+**steps**: 100  
+**reward_name**: aesthetic  
+**prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
+**phi**: 3  
+**tau**: 1.0  
+**kl_weight**: 0.01  
+**lambda_tempering**: True  
+**lambda_one_at**: 100  
+**resample_frequency**: 10  
+**partial_resampling**: True  
+**continuous_formulation**: True  
+**best_reward**: [7.140955924987793, 7.413941383361816, 7.130088806152344, 7.369669437408447, 7.149348258972168, 7.201818466186523, 7.420206546783447, 7.0563249588012695]  
+**Average**: 7.24  (8)
+
+---
+
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -151,7 +161,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 5  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -170,26 +179,6 @@
 
 ---
 
-**use_remdm**: False  
-**CFG**: 9  
-**steps**: 100  
-**reward_name**: aesthetic  
-**prompt**: A large body of water with a rock in the middle and mountains in the background.  
-**num_images**: 8  
-**phi**: 3  
-**tau**: 1.0  
-**kl_weight**: 0.01  
-**lambda_tempering**: True  
-**lambda_one_at**: 100  
-**resample_frequency**: 10  
-**partial_resampling**: True  
-**continuous_formulation**: True  
-**best_reward**: [7.413941383361816, 7.369669437408447, 7.149348258972168, 7.201818466186523, 7.420206546783447, 7.0563249588012695]  
-**Average**: 7.27  (6)
-
----
-
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -208,7 +197,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -227,7 +215,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -246,7 +233,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -265,7 +251,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -284,7 +269,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -303,7 +287,6 @@
 
 ---
 
-**use_remdm**: False  
 **CFG**: 9  
 **steps**: 100  
 **reward_name**: aesthetic  
@@ -322,4 +305,119 @@
 
 ---
 
-# SMC with Locally Optimal Proposal - Straight through grads
+## SMC with Locally Optimal Proposal - Straight through grads
+# Using ReMDM scheduler
+## Best-of-N
+**remdm_schedule**: cosine  
+**remdm_remask_strategy**: rescale  
+**remdm_eta**: 0.05  
+**CFG**: 9  
+**steps**: 100  
+**reward_name**: aesthetic  
+**prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
+**best_reward**: [6.819243431091309, 6.816343307495117, 6.956999778747559]  
+**Average**: 6.86  (3)
+
+---
+
+**remdm_schedule**: cosine  
+**remdm_remask_strategy**: rescale  
+**remdm_eta**: 0.1  
+**CFG**: 9  
+**steps**: 100  
+**reward_name**: aesthetic  
+**prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
+**best_reward**: [6.944384574890137, 6.836662292480469, 6.784484386444092, 6.79617977142334]  
+**Average**: 6.84  (4)
+
+---
+
+## SMC with Reverse as proposal
+## SMC with Locally Optimal Proposal
+**remdm_schedule**: cosine  
+**remdm_remask_strategy**: rescale  
+**remdm_eta**: 0.05  
+**CFG**: 9  
+**steps**: 100  
+**reward_name**: aesthetic  
+**prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
+**phi**: 1  
+**tau**: 1.0  
+**kl_weight**: 0.05  
+**lambda_tempering**: True  
+**lambda_one_at**: 100  
+**resample_frequency**: 10  
+**partial_resampling**: True  
+**continuous_formulation**: True  
+**best_reward**: [6.890366077423096, 7.239747047424316, 6.890227317810059, 6.787561416625977]  
+**Average**: 6.95  (4)
+
+---
+
+**remdm_schedule**: cosine  
+**remdm_remask_strategy**: rescale  
+**remdm_eta**: 0.05  
+**CFG**: 9  
+**steps**: 100  
+**reward_name**: aesthetic  
+**prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
+**phi**: 1  
+**tau**: 1.0  
+**kl_weight**: 0.01  
+**lambda_tempering**: True  
+**lambda_one_at**: 100  
+**resample_frequency**: 10  
+**partial_resampling**: True  
+**continuous_formulation**: True  
+**best_reward**: [6.221607685089111, 6.200217247009277]  
+**Average**: 6.21  (2)
+
+---
+
+**remdm_schedule**: cosine  
+**remdm_remask_strategy**: rescale  
+**remdm_eta**: 0.1  
+**CFG**: 9  
+**steps**: 100  
+**reward_name**: aesthetic  
+**prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
+**phi**: 1  
+**tau**: 1.0  
+**kl_weight**: 0.05  
+**lambda_tempering**: True  
+**lambda_one_at**: 100  
+**resample_frequency**: 10  
+**partial_resampling**: True  
+**continuous_formulation**: True  
+**best_reward**: [6.890666961669922, 6.940825462341309, 6.915220260620117, 6.861484050750732]  
+**Average**: 6.90  (4)
+
+---
+
+**remdm_schedule**: cosine  
+**remdm_remask_strategy**: rescale  
+**remdm_eta**: 0.05  
+**CFG**: 9  
+**steps**: 100  
+**reward_name**: aesthetic  
+**prompt**: A large body of water with a rock in the middle and mountains in the background.  
+**num_images**: 8  
+**phi**: 3  
+**tau**: 1.0  
+**kl_weight**: 0.05  
+**lambda_tempering**: True  
+**lambda_one_at**: 100  
+**resample_frequency**: 10  
+**partial_resampling**: True  
+**continuous_formulation**: True  
+**best_reward**: [6.913580894470215, 6.773632526397705]  
+**Average**: 6.84  (2)
+
+---
+
+## SMC with Locally Optimal Proposal - Straight through grads
