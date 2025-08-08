@@ -517,12 +517,14 @@ class Pipeline:
                 )
                 tmp_logits = torch.cat([tmp_logits, pad_logits], dim=-1)
                 logits[j:j+batch_p] = tmp_logits.detach()
-                sched_out = self.scheduler.step(
-                    latents=latents,
-                    step=i,
-                    logits=logits,
-                )
-                latents = sched_out.new_latents
+            
+            # Propose new particles
+            sched_out = self.scheduler.step(
+                latents=latents,
+                step=i,
+                logits=logits,
+            )
+            latents = sched_out.new_latents
                 
         bar = enumerate(reversed(range(num_inference_steps)))
         if not disable_progress_bar:
