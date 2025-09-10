@@ -10,10 +10,10 @@ from transformers import CLIPTextModelWithProjection, CLIPTokenizer
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 
-from smc.transformer import Transformer2DModel
-from smc.scheduler import BaseScheduler
-from smc.resampling import compute_ess_from_log_w, normalize_weights
-from smc_lora_ft.lora_pipeline import MeissonicLoraLoaderMixin
+from src.smc.transformer import Transformer2DModel
+from src.smc.scheduler import BaseScheduler
+from src.smc.resampling import compute_ess_from_log_w, normalize_weights
+from src.smc_lora_ft.lora_pipeline import MeissonicLoraLoaderMixin
 
 
 def _prepare_latent_image_ids(batch_size, height, width, device, dtype):
