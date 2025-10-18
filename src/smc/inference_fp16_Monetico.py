@@ -18,6 +18,18 @@ import src.smc.rewards as rewards
 from src.smc.resampling import resample
 from src.utils.metadata import get_metadata, save_metadata_json
 
+import numpy as np
+import random
+import torch.backends.cudnn as cudnn
+
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.cuda.manual_seed_all(42)
+np.random.seed(42)
+cudnn.benchmark = False
+cudnn.deterministic = True
+random.seed(42)
+
 device = 'cuda'
 dtype = torch.bfloat16
 model_path = "Collov-Labs/Monetico"
@@ -34,7 +46,7 @@ use_remdm = False
 if use_remdm:
     remdm_schedule = "cosine"
     remdm_remask_strategy = "rescale"
-    remdm_eta = 0.1
+    remdm_eta = 0.05
     scheduler_new = ReMDMScheduler(
         schedule=remdm_schedule,
         remask_strategy=remdm_remask_strategy,
@@ -48,12 +60,26 @@ else:
     )
 pipe = Pipeline(vq_model, tokenizer=tokenizer, text_encoder=text_encoder, transformer=model, scheduler=scheduler_new, device=device, model_dtype=dtype)
 
-steps = 100
+steps = 48
 CFG = 9
 resolution = 512 
 negative_prompt = "worst quality, low quality, low res, blurry, distortion, watermark, logo, signature, text, jpeg artifacts, signature, sketch, duplicate, ugly, identifying mark"
 
 prompts = [
+    # "a photo of a purple bear",
+    # "a photo of a bench left of a bear",
+    # "a photo of a red orange and a purple broccoli",
+    # "a photo of a brown giraffe and a white stop sign",
+    # "a photo of a red dog",
+    # "a photo of a white sandwich",
+    # "a photo of four giraffes",
+    # "a green stop sign in a red field",
+    # "a photo of a green tennis racket and a black dog",
+    "a photo of a yellow bird and a black motorcycle",
+    # "a photo of an orange cow and a purple sandwich",
+    # "a photo of a blue clock and a white cup",
+    # "a photo of a brown knife and a blue donut",
+    # ("A high-resolution image of a rabbit.", "A green colored rabbit"),
     # "Three boats in the ocean with a rainbow in the sky.", 
     # "Two actors are posing for a pictur with one wearing a black and white face paint.",
     "A large body of water with a rock in the middle and mountains in the background.",
@@ -65,24 +91,26 @@ prompts = [
     "A woman is standing next to a picture of another woman."
 ]
 
-num_images = 8
-batch_p = 1
-# kl_weight = 0.0005 # pick score
-kl_weight = 0.01 # aesthetic score
+num_images = 4
+batch_p = 4
+# kl_weight = 0.0001 # pick score
+# kl_weight = 0.01 # aesthetic score
+kl_weight = 0.02 # image reward
 # kl_weight = 10000
 proposal_type = "locally_optimal"
 # proposal_type = "reverse"
 # proposal_type = "without_SMC"
 # proposal_type = "straight_through_gradients"
-resample_frequency = 10
+resample_frequency = 4
 partial_resampling = True
+ess_threshold = 0.5
 continuous_formulation = True
 
-phi = 1
+phi = 4
 tau = 1.0
 lambda_tempering = True
 if lambda_tempering:
-    lambda_one_at = 100
+    lambda_one_at = 48
     lambdas = torch.cat([torch.linspace(0, 1, lambda_one_at + 1), torch.ones(steps - lambda_one_at)])
 else:
     lambdas = None
@@ -94,7 +122,8 @@ else:
     
 
 # reward_fn, reward_name = rewards.PickScore(device = 'cuda'), "pick"
-reward_fn, reward_name = rewards.aesthetic_score(device = 'cuda'), "aesthetic"
+# reward_fn, reward_name = rewards.aesthetic_score(device = 'cuda'), "aesthetic"
+reward_fn, reward_name = rewards.ImageReward_Fk_Steering(device = 'cuda', bias=5.0), "image_reward_plus_5"
 # reward_fn, reward_name = lambda images, prompts: rewards.color_match_reward(images, torch.tensor([1, 0, 0])), "color_red"
 image_reward_fn = lambda images: reward_fn(
     images, 
@@ -106,7 +135,7 @@ metadata = get_metadata(dict(locals()))
 images = pipe(
     prompt=prompt, 
     reward_fn=image_reward_fn,
-    resample_fn=lambda log_w: resample(log_w, ess_threshold=0.5, partial=partial_resampling),
+    resample_fn=lambda log_w: resample(log_w, ess_threshold=ess_threshold, partial=partial_resampling),
     resample_frequency=resample_frequency,
     negative_prompt=negative_prompt,
     height=resolution,

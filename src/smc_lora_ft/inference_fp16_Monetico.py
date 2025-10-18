@@ -97,16 +97,16 @@ batch_p = 1
 # kl_weight = 0.01 # aesthetic score
 kl_weight = 0.02 # image reward
 # kl_weight = 10000
-# proposal_type = "locally_optimal"
+proposal_type = "locally_optimal"
 # proposal_type = "reverse"
-proposal_type = "without_SMC"
+# proposal_type = "without_SMC"
 # proposal_type = "straight_through_gradients"
 resample_frequency = 10
 partial_resampling = True
 ess_threshold = 0.5
 continuous_formulation = True
 
-phi = 3
+phi = 1
 tau = 1.0
 lambda_tempering = True
 if lambda_tempering:
