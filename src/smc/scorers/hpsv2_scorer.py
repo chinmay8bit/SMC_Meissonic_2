@@ -33,7 +33,8 @@ class HPSv2Scorer(torch.nn.Module):
             with_region_predictor=False
         )
 
-        checkpoint_path = f"{os.path.expanduser('~')}/.cache/huggingface/hub/models--xswu--HPSv2/snapshots/697403c78157020a1ae59d23f111aa58ced35b0a/HPS_v2_compressed.pt"
+        hf_cache_path = os.getenv("HF_HOME", os.path.expanduser("~/.cache/huggingface"))
+        checkpoint_path = os.path.join(hf_cache_path, "hub/models--xswu--HPSv2/snapshots/697403c78157020a1ae59d23f111aa58ced35b0a/HPS_v2_compressed.pt")
         # force download of model via score
         hpsv2.score([], "")
         checkpoint = torch.load(checkpoint_path, map_location=self.device)
