@@ -34,6 +34,7 @@ resolution = 1024
 negative_prompt = "worst quality, low quality, low res, blurry, distortion, watermark, logo, signature, text, jpeg artifacts, signature, sketch, duplicate, ugly, identifying mark"
 
 prompts = [
+    "Three boats in the ocean with a rainbow in the sky.", 
     "Two actors are posing for a pictur with one wearing a black and white face paint.",
     "A large body of water with a rock in the middle and mountains in the background.",
     "A white and blue coffee mug with a picture of a man on it.",
