@@ -208,5 +208,9 @@ __marimo__/
 
 output/
 output_SMC/
+output_SMC_lora_ft/
+geneval_metadata_outputs/
+geneval_metadata_results*
 assets/
 *.out
+plots*
