@@ -1,0 +1,37 @@
+{
+  "total_images": 2212,
+  "total_prompts": 553,
+  "correct_images": 0.43399638336347196,
+  "correct_prompts": 0.5027124773960217,
+  "colors": {
+    "correct": 0.8351063829787234,
+    "count": 376,
+    "correct_count": 314
+  },
+  "position": {
+    "correct": 0.045,
+    "count": 400,
+    "correct_count": 18
+  },
+  "counting": {
+    "correct": 0.253125,
+    "count": 320,
+    "correct_count": 81
+  },
+  "single_object": {
+    "correct": 0.878125,
+    "count": 320,
+    "correct_count": 281
+  },
+  "two_object": {
+    "correct": 0.49242424242424243,
+    "count": 396,
+    "correct_count": 195
+  },
+  "color_attr": {
+    "correct": 0.1775,
+    "count": 400,
+    "correct_count": 71
+  },
+  "overall_score": 0.4468801042338277
+}
